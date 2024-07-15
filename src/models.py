@@ -10,18 +10,20 @@ class BasicConvClassifier(nn.Module):
         num_classes: int,
         seq_len: int,
         in_channels: int,
-        hid_dim: int = 128
+        hid_dim: int = 128,
+        dropout_rate: float = 0.5 # ドロップアウト率を追加
     ) -> None:
         super().__init__()
 
         self.blocks = nn.Sequential(
-            ConvBlock(in_channels, hid_dim),
-            ConvBlock(hid_dim, hid_dim),
+            ConvBlock(in_channels, hid_dim, dropout_rate=dropout_rate),
+            ConvBlock(hid_dim, hid_dim, dropout_rate=dropout_rate),
         )
 
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool1d(1),
             Rearrange("b d 1 -> b d"),
+            nn.Dropout(dropout_rate),
             nn.Linear(hid_dim, num_classes),
         )
 
@@ -66,9 +68,11 @@ class ConvBlock(nn.Module):
             X = self.conv0(X)
 
         X = F.gelu(self.batchnorm0(X))
+        X = self.dropout(X)  # 活性化関数の後にドロップアウトを追加
 
         X = self.conv1(X) + X  # skip connection
         X = F.gelu(self.batchnorm1(X))
+        X = self.dropout(X)  # 活性化関数の後にドロップアウトを追加
 
         # X = self.conv2(X)
         # X = F.glu(X, dim=-2)
