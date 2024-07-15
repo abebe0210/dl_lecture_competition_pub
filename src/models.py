@@ -18,7 +18,10 @@ class BasicConvClassifier(nn.Module):
         self.blocks = nn.Sequential(
             ConvBlock(in_channels, hid_dim, dropout_rate=dropout_rate),
             ConvBlock(hid_dim, hid_dim, dropout_rate=dropout_rate),
+            ConvBlock(hid_dim, hid_dim, dropout_rate=dropout_rate),
         )
+        
+        self.attention = SelfAttention(hid_dim)
 
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool1d(1),
@@ -35,6 +38,7 @@ class BasicConvClassifier(nn.Module):
             X ( b, num_classes ): _description_
         """
         X = self.blocks(X)
+        X = self.attention(X)
 
         return self.head(X)
 
@@ -45,7 +49,7 @@ class ConvBlock(nn.Module):
         in_dim,
         out_dim,
         kernel_size: int = 3,
-        p_drop: float = 0.1,
+        dropout_rate: float = 0.3,
     ) -> None:
         super().__init__()
         
@@ -59,7 +63,7 @@ class ConvBlock(nn.Module):
         self.batchnorm0 = nn.BatchNorm1d(num_features=out_dim)
         self.batchnorm1 = nn.BatchNorm1d(num_features=out_dim)
 
-        self.dropout = nn.Dropout(p_drop)
+        self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         if self.in_dim == self.out_dim:
@@ -77,4 +81,17 @@ class ConvBlock(nn.Module):
         # X = self.conv2(X)
         # X = F.glu(X, dim=-2)
 
-        return self.dropout(X)
+        return X
+
+class SelfAttention(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.query = nn.Conv1d(dim, dim, 1)
+        self.key = nn.Conv1d(dim, dim, 1)
+        self.value = nn.Conv1d(dim, dim, 1)
+        
+    def forward(self, x):
+        q, k, v = self.query(x), self.key(x), self.value(x)
+        attn = F.softmax(torch.bmm(q.transpose(1, 2), k), dim=-1)
+        out = torch.bmm(v, attn.transpose(1, 2))
+        return out + x
